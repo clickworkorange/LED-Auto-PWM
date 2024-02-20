@@ -23,11 +23,6 @@ static uint16_t samples[ACNT] = {[0 ... ACNT-1] = 0};
 // Pointer to last/current sample
 static  uint8_t samptr = 0; 
 
-void initMCU(void) {
-  // Enable ADC Noise reduction mode
-  // SMCR = (1<<SM0|(1<<SE));
-}
-
 void initADC(void) {
   // Enable ADC w. prescaler 128, conversion complete interrupt enabled
   ADCSRA = (1<<ADEN)|(1<<ADIE)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0);
@@ -108,18 +103,19 @@ ISR(ADC_vect) {
 }
 
 int main(void) {
+  // TODO: Map light level to pwm 
+  // TODO: Add button to set max level 
   // TODO: Explore using Noise Reduction Mode
   // TODO: Control individual LEDs on/off
   // TODO: Temperature compensation
   // TODO: Use multiple ADC channels?
-  initMCU();
   initADC();
   initPWM();
   lcd_init(LCD_DISP_ON);
   lcd_charMode(DOUBLESIZE);
   sei();
   while(1) {
-    // Filter average 
+    // Filter average and set PWM
     int pwm = max(min(avg(), DMAX), DMIN);
     if (pwm > OCR1A) {
       int step = (pwm - OCR1A) / 10;
@@ -136,9 +132,5 @@ int main(void) {
     } 
     // Print latest sample & average on OLED
     printValues(samples[samptr], OCR1A);
-    // Set PWM duty to sample average
-    // OCR1A = pwm; 
-    // Wait a moment
-    //_delay_ms(UPDD);
   }
 }
