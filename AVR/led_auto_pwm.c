@@ -1,8 +1,17 @@
-//****main.c****//
+/*
+             |||
+            (o o)
+ +-------oOO-{_}-OOo--------+
+ |                          |
+ |   © 2024 Ola Tuvesson    |
+ |   clickworkorange Ltd    |
+ |                          |
+ | info@clickworkorange.com |
+ |                          |
+ +--------------------------+
 
-#include <stdint.h>
-#include <stdio.h> 
-#include <stdlib.h>
+*/
+
 #include <avr/io.h> 
 #include <avr/interrupt.h>
 #include <util/delay.h>
@@ -44,8 +53,8 @@ void printValues(uint16_t val1, uint16_t val2) {
   char buf1[5];
   char buf2[5];
   // Convert the values to strings (base10)
-  itoa(val1, buf1, 10);
-  itoa(val2, buf2, 10);
+  sprintf(buf1, "%d", val1);
+  sprintf(buf2, "%d", val2);
   lcd_gotoxy(0,0);
   lcd_puts(buf1);
   lcd_puts("    ");
@@ -54,9 +63,14 @@ void printValues(uint16_t val1, uint16_t val2) {
   lcd_puts("    ");
 }
 
-uint16_t min(uint16_t x, uint16_t y) {
+uint16_t min(uint16_t a, uint16_t b) {
   // Return the lowest of two values
-  return y ^ ((x ^ y) & -(x < y));
+  return a < b ? a : b;
+}
+
+uint16_t max(uint16_t a, uint16_t b) {
+  // Return the highest of two values
+  return a > b ? a : b;
 }
 
 uint16_t avg(void) {
@@ -106,12 +120,25 @@ int main(void) {
   sei();
   while(1) {
     // Filter average 
-    int pwm = min(avg(), DMAX);
+    int pwm = max(min(avg(), DMAX), DMIN);
+    if (pwm > OCR1A) {
+      int step = (pwm - OCR1A) / 10;
+      if (step < 1) {
+        step = 1;
+      }
+      OCR1A += step;
+    } else if (pwm < OCR1A) {
+      int step = (OCR1A - pwm) / 10;
+      if (step < 1) {
+        step = 1;
+      }
+      OCR1A -= step;
+    } 
     // Print latest sample & average on OLED
-    printValues(samples[samptr], pwm);
+    printValues(samples[samptr], OCR1A);
     // Set PWM duty to sample average
-    OCR1A = pwm; 
+    // OCR1A = pwm; 
     // Wait a moment
-    _delay_ms(UPDD);
+    //_delay_ms(UPDD);
   }
 }
