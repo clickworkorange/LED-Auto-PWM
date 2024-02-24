@@ -11,7 +11,6 @@
  +--------------------------+
 
 */
-
 #include <avr/io.h> 
 #include <avr/interrupt.h>
 #include <util/delay.h>
@@ -22,6 +21,8 @@
 static uint16_t samples[ACNT] = {[0 ... ACNT-1] = 0};
 // Pointer to last/current sample
 static  uint8_t samptr = 0; 
+// Variable holding actual sampling delay
+static uint16_t delay = ADCD;
 
 void initADC(void) {
   // Enable ADC w. prescaler 128, conversion complete interrupt enabled
@@ -33,8 +34,8 @@ void initADC(void) {
 }
 
 void initPWM(void) {
-  // Fast PWM Mode 7, Top = 0x03FF
-  TCCR1A = (1<<COM1A1)|(1<<WGM11)|(1<<WGM10); 
+  // Fast PWM Mode 7, Top = 0x03FF, inverted
+  TCCR1A = (1<<COM1A1)|(1<<COM1A0)|(1<<WGM11)|(1<<WGM10); 
   // Prescaler 64 (120Hz @ 8MHz)
   TCCR1B = (1<<WGM12)|(1<<CS11)|(1<<CS10); 
   // TIMER1_COMPA_vect ISR on TCNT1 matches OCR1A 
@@ -68,13 +69,27 @@ uint16_t max(uint16_t a, uint16_t b) {
   return a > b ? a : b;
 }
 
-uint16_t avg(void) {
-  // Return average of ACNT samples as int16
+uint16_t avg(uint16_t arr[], uint8_t size) {
+  // Return average of array values
   float average = 0.0;
-  for(int i = 0; i < ACNT; i++){
-     average = average + samples[i];
+  for(int i = 0; i < size; i++){
+     average = average + arr[i];
   }
-  return (int)(average / ACNT);
+  return (int)(average / size);
+}
+
+uint16_t map(uint16_t val, uint16_t in_min, uint16_t in_max, uint16_t out_min, uint16_t out_max) {
+  // Map a value from one range of integers to another
+  double slope = 1.0 * (out_max - out_min) / (in_max - in_min);
+  return out_min + slope * (val - in_min);
+}
+
+void delay_us(int d) {
+  // _delay_us only accepts a constant, so we comply
+  for (int i = 0; i < (d / 10); i++) {
+    // But looping also takes time, so we do bigger chunks
+    _delay_us(10);
+  }
 }
 
 void addSample(uint16_t sample) {
@@ -88,26 +103,26 @@ void addSample(uint16_t sample) {
 
 ISR(TIMER1_COMPA_vect) {
   // Timer1 reached TOP
-  _delay_us(ADCD);
-  // indicate ADC conversion start
-  PORTB ^= (1<<PB0);
+  delay_us(delay);
+  // Indicate ADC conversion start, PB0 low
+  PORTB &= ~(1<<PB0);
   // Start ADC conversion
   ADCSRA |= (1<<ADSC);
 }
 
 ISR(ADC_vect) {
-  // indicate ADC conversion end
-  PORTB ^= (1<<PB0);
+  // Indicate ADC conversion end, PB0 high
+  PORTB |= (1<<PB0);
   // ADC conversion completed, add result to samples[]
   addSample(ADC);
 }
 
 int main(void) {
-  // TODO: Map light level to pwm 
+  // TODO: ATTiny84 compatibility 
   // TODO: Add button to set max level 
   // TODO: Explore using Noise Reduction Mode
   // TODO: Control individual LEDs on/off
-  // TODO: Temperature compensation
+  // TODO: Temperature compensation?
   // TODO: Use multiple ADC channels?
   initADC();
   initPWM();
@@ -116,7 +131,7 @@ int main(void) {
   sei();
   while(1) {
     // Filter average and set PWM
-    int pwm = max(min(avg(), DMAX), DMIN);
+    int pwm = map(avg(samples, ACNT), AMIN, AMAX, DMIN, DMAX);
     if (pwm > OCR1A) {
       int step = (pwm - OCR1A) / 10;
       if (step < 1) {
@@ -129,7 +144,9 @@ int main(void) {
         step = 1;
       }
       OCR1A -= step;
-    } 
+    }
+    // Shorten sampling delay for higher voltages by subtracting half of OCR1A
+    delay = ADCD - (OCR1A>>1);
     // Print latest sample & average on OLED
     printValues(samples[samptr], OCR1A);
   }
