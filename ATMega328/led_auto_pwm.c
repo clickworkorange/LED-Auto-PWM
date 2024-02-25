@@ -118,7 +118,7 @@ ISR(ADC_vect) {
 }
 
 int main(void) {
-  // TODO: ATTiny84 compatibility 
+  // TODO: Merge ATMega328 & ATTiny85 code
   // TODO: Add button to set max level 
   // TODO: Explore using Noise Reduction Mode
   // TODO: Control individual LEDs on/off
