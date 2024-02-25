@@ -126,7 +126,7 @@ int main(void) {
       }
       OCR0B -= step;
     }
-    // Shorten sampling delay for higher voltages by subtracting half of OCR0B
-    delay = ADCD - (OCR0B>>1);
+    // Shorten sampling delay for higher voltages by subtracting OCR0B x 2
+    delay = ADCD - (OCR0B*2);
   }
 }
